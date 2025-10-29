@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Widget Discord - Kreatywny Design</title>
+    <!-- Ładowanie Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Ładowanie Font Awesome (ikony) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -17,11 +20,13 @@
             align-items: center;
             min-height: 100vh;
             perspective: 1000px; 
+            padding: 20px; /* Dodane dla lepszej responsywności na małych ekranach */
         }
 
         /* Ustawienia kolorów i cieni */
         .discord-card {
             background-color: #1a1a1a; 
+            color: #fcfcfc; /* Tekst domyślny biały */
             transition: transform 0.4s ease-out, box-shadow 0.4s ease-out;
             border: 1px solid #36393f;
             border-radius: 12px; 
@@ -45,6 +50,18 @@
         .member-item {
             background-color: #23272A; 
         }
+
+        /* Dostosowanie paska przewijania (dla listy członków) */
+        #member-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        #member-list::-webkit-scrollbar-thumb {
+            background-color: #36393f;
+            border-radius: 3px;
+        }
+        #member-list::-webkit-scrollbar-track {
+            background-color: #1a1a1a;
+        }
         
     </style>
     <script>
@@ -61,6 +78,10 @@
                         // NOWY AKCENT CYJANOWY (dla wyróżnień, hover i statusu)
                         'accent-vibrant': '#00BCD4', 
                         'status-online': '#4DD0E1', 
+                        // Dodatkowe statusy (choć API zwraca tylko 'online'/'offline' w widget.json)
+                        'status-idle': '#faa61a',
+                        'status-dnd': '#f04747',
+                        'status-offline': '#747f8d',
                     }
                 }
             }
@@ -71,14 +92,17 @@
 
     <div id="discord-widget" class="discord-card w-full max-w-sm rounded-xl shadow-2xl overflow-hidden">
         
+        <!-- Nagłówek -->
         <div class="p-4 header-bg flex items-center justify-between">
             <div class="flex items-center">
+                <!-- Obrazek z fallbackiem -->
                 <img src="./EN_G.png" onerror="this.onerror=null;this.src='https://placehold.co/40x40/36393f/b9b9b9?text=EN';" alt="Eagle Nest Logo" class="w-10 h-10 object-contain rounded-lg mr-3 shadow-md">
 
                 <div>
                     <h1 class="text-xl font-extrabold text-light-text tracking-wider">EAGLE NEST</h1>
                     <div class="flex items-center mt-1">
-                        <span class="w-2 h-2 rounded-full mr-2 bg-status-online shadow-status-online"></span>
+                        <!-- Używamy dynamicznej klasy 'status-dot' dla kropki statusu -->
+                        <span id="status-dot" class="w-2 h-2 rounded-full mr-2 bg-status-offline shadow-status-online"></span>
                         <p id="online-status" class="text-xs text-muted-text font-medium uppercase">Ładowanie...</p>
                     </div>
                 </div>
@@ -87,7 +111,8 @@
             <i class="fab fa-discord text-4xl text-accent-grey opacity-80"></i>
         </div>
 
-        <div class="p-5 text-center">
+        <!-- Regulamin i Przycisk Dołączenia -->
+        <div class="p-5 text-center border-b border-gray-800">
             
             <div class="flex items-center justify-center bg-gray-900/50 p-3 rounded-lg mb-6 border border-gray-800">
                 <!-- Używamy akcentu szarego dla ikony -->
@@ -100,16 +125,16 @@
             <!-- Przycisk z tłem SZARYM i HOVER CYJANOWYM -->
             <button id="join-button" 
                 class="w-full py-3 bg-accent-grey text-gray-900 font-extrabold rounded-lg uppercase tracking-widest 
-                       shadow-lg shadow-accent-vibrant/50 
-                       hover:bg-accent-vibrant hover:text-white
-                       transition duration-300 transform active:scale-95 
-                       focus:outline-none focus:ring-4 focus:ring-accent-vibrant focus:ring-opacity-70">
+                        shadow-lg shadow-accent-vibrant/50 
+                        hover:bg-accent-vibrant hover:text-white
+                        transition duration-300 transform active:scale-95 
+                        focus:outline-none focus:ring-4 focus:ring-accent-vibrant focus:ring-opacity-70">
                 <i class="fas fa-arrow-right-to-bracket mr-2"></i> ZABIERZ MNIE NA SERWER
             </button>
         </div>
         
         <!-- Sekcja listy użytkowników -->
-        <div class="p-4 border-t border-gray-800">
+        <div class="p-4">
             <h2 class="text-sm font-semibold text-muted-text uppercase mb-3 flex justify-between items-center">
                 <span>Aktywni Użytkownicy</span>
                 <!-- Używamy cyjanowego akcentu dla licznika -->
@@ -130,46 +155,38 @@
         // ID TWOJEGO SERWERA DISCORD, pobrane ze zrzutów
         const DISCORD_SERVER_ID = "1329827505703747687";
         const DISCORD_API_URL = `https://discord.com/api/guilds/${DISCORD_SERVER_ID}/widget.json`;
-        
+        // WAŻNE: Wpisz tutaj link do zaproszenia, który pobrałeś z Discorda
+        const PERMANENT_INVITE_LINK = "https://discord.gg/Yv8xjZrn5G"; 
+
+        // --- Elementy DOM ---
+        const memberList = document.getElementById('member-list');
+        const onlineStatus = document.getElementById('online-status');
+        const memberCount = document.getElementById('member-count');
+        const loadingMessage = document.getElementById('loading-message');
+        const joinButton = document.getElementById('join-button');
+        const statusDot = document.getElementById('status-dot');
+
         // --- Funkcje użytkowe ---
         
-        function copyToClipboard(text) {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed'; 
-            document.body.appendChild(textarea);
-            textarea.select();
-            
-            try {
-                document.execCommand('copy');
-                showToast("Skopiowano link do schowka!");
-            } catch (err) {
-                console.error('Copy failed: ', err);
-                showToast("Błąd: Nie udało się skopiować linku.", 'red');
-            }
-            
-            document.body.removeChild(textarea);
-        }
-
+        // Funkcja do pokazywania tymczasowych komunikatów (np. Błąd / Skopiowano)
         function showToast(message, color = 'green') {
             const container = document.getElementById('toast-container');
-            // Toast używa cyjanu, bo jest to kolor powiadomienia, który musi być widoczny.
             const bgColor = color === 'red' ? 'bg-red-500' : 'bg-[#00BCD4]'; 
 
             const toast = document.createElement('div');
-            toast.className = `p-3 mb-2 ${bgColor} text-white rounded-lg shadow-xl opacity-0 transition-opacity duration-300`;
+            toast.className = `p-3 mb-2 ${bgColor} text-white rounded-lg shadow-xl opacity-0 transition-opacity duration-300 transform translate-y-2`;
             toast.textContent = message;
 
             container.appendChild(toast);
 
             setTimeout(() => {
-                toast.classList.remove('opacity-0');
-                toast.classList.add('opacity-100');
+                toast.classList.remove('opacity-0', 'translate-y-2');
+                toast.classList.add('opacity-100', 'translate-y-0');
             }, 10); 
 
             setTimeout(() => {
-                toast.classList.remove('opacity-100');
-                toast.classList.add('opacity-0');
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-2');
                 
                 setTimeout(() => {
                     container.removeChild(toast);
@@ -177,11 +194,8 @@
             }, 3000);
         }
         
-        // --- Funkcje logiki Discorda ---
-
+        // Funkcja do generowania elementu członka listy
         function renderMembers(members) {
-            const memberList = document.getElementById('member-list');
-            const loadingMessage = document.getElementById('loading-message');
             memberList.innerHTML = ''; // Wyczyść poprzednie dane
             
             if (loadingMessage) {
@@ -195,30 +209,41 @@
 
             members.slice(0, 5).forEach(member => { // Pokaż tylko 5 pierwszych członków
                 const avatarUrl = member.avatar_url || 'https://cdn.discordapp.com/embed/avatars/0.png';
+                
+                // Dostosowanie klasy statusu (widget.json zwraca tylko 'online', 'idle', 'dnd', 'offline')
+                let statusClass = 'text-status-offline';
+                if (member.status === 'online') statusClass = 'text-status-online';
+                else if (member.status === 'idle') statusClass = 'text-status-idle';
+                else if (member.status === 'dnd') statusClass = 'text-status-dnd';
+                
+                const statusText = member.status ? member.status.charAt(0).toUpperCase() + member.status.slice(1) : 'Offline';
 
                 const memberElement = document.createElement('div');
                 memberElement.className = 'member-item flex items-center p-2 rounded-lg transition duration-200 hover:bg-gray-800';
                 
                 memberElement.innerHTML = `
-                    <img src="${avatarUrl}" alt="${member.username}" class="w-8 h-8 rounded-full mr-3 object-cover">
+                    <div class="relative w-8 h-8 mr-3">
+                        <img src="${avatarUrl}" alt="${member.username}" class="w-full h-full rounded-full object-cover">
+                        <!-- Mała kropka statusu na avatarze (wizualnie ułatwia odczyt) -->
+                        <span class="absolute bottom-0 right-0 w-2 h-2 rounded-full border-2 border-[#1a1a1a] bg-${member.status || 'status-offline'}"></span>
+                    </div>
                     <span class="text-light-text text-sm font-medium truncate">${member.username}</span>
-                    <span class="ml-auto text-xs font-semibold text-status-online">Online</span>
+                    <span class="ml-auto text-xs font-semibold ${statusClass}">${statusText}</span>
                 `;
                 memberList.appendChild(memberElement);
             });
 
             // Dodaj informację, jeśli jest więcej członków
             if (members.length > 5) {
-                 const moreCount = members.length - 5;
-                 const moreInfo = document.createElement('p');
-                 moreInfo.className = 'text-muted-text text-xs text-center pt-2';
-                 moreInfo.textContent = `i ${moreCount} innych...`;
-                 memberList.appendChild(moreInfo);
+                const moreCount = members.length - 5;
+                const moreInfo = document.createElement('p');
+                moreInfo.className = 'text-muted-text text-xs text-center pt-2';
+                moreInfo.textContent = `i ${moreCount} innych...`;
+                memberList.appendChild(moreInfo);
             }
         }
         
         async function fetchWidgetData() {
-            // Wprowadzam prostą obsługę błędów i ponawiania, aby uniknąć problemów z siecią.
             const maxRetries = 3;
             let lastError = null;
             
@@ -231,17 +256,32 @@
                     const data = await response.json();
                     
                     // 1. Aktualizacja statusu online w nagłówku
-                    const onlineCount = data.members ? data.members.length : 0;
-                    document.getElementById('online-status').textContent = `Online: ${onlineCount} osoby`;
-                    document.getElementById('member-count').textContent = onlineCount;
+                    const onlineCountValue = data.members ? data.members.filter(m => m.status === 'online').length : 0;
+                    
+                    onlineStatus.textContent = `Online: ${onlineCountValue} osoby`;
+                    memberCount.textContent = onlineCountValue;
+                    
+                    // Ustawienie kropki statusu na podstawie obecności
+                    statusDot.classList.remove('bg-status-offline', 'bg-status-online');
+                    if (onlineCountValue > 0) {
+                        statusDot.classList.add('bg-status-online');
+                    } else {
+                         statusDot.classList.add('bg-status-offline');
+                    }
                     
                     // 2. Renderowanie listy członków
-                    renderMembers(data.members);
+                    // Sortujemy, aby online byli na górze
+                    const sortedMembers = data.members.sort((a, b) => {
+                        if (a.status === 'online' && b.status !== 'online') return -1;
+                        if (a.status !== 'online' && b.status === 'online') return 1;
+                        return 0;
+                    });
+
+                    renderMembers(sortedMembers);
                     return; // Zakończ po udanym pobraniu
                     
                 } catch (error) {
                     lastError = error;
-                    console.error(`Próba ${attempt} nieudana:`, error);
                     if (attempt < maxRetries) {
                          // Implementacja wykładniczego wycofywania: 1s, 2s, 4s
                          const delay = Math.pow(2, attempt) * 1000;
@@ -251,11 +291,10 @@
             }
 
             // Jeśli wszystkie próby się nie powiodły
-            console.error("Nie udało się pobrać danych widgetu Discorda po wszystkich próbach:", lastError);
-            document.getElementById('online-status').textContent = 'Widget Serwera jest wyłączony!';
-            document.getElementById('member-count').textContent = 'BŁĄD';
-            const memberList = document.getElementById('member-list');
+            onlineStatus.textContent = 'Widget Serwera jest wyłączony!';
+            memberCount.textContent = 'BŁĄD';
             memberList.innerHTML = '<p class="text-red-400 text-sm text-center p-2">Błąd: Upewnij się, że Widget Serwera jest włączony na Discordzie (Ustawienia -> Widget serwera).</p>';
+            showToast("Błąd połączenia z Discordem!", 'red');
         }
 
         // --- Uruchomienie skryptów po załadowaniu DOM ---
@@ -265,14 +304,14 @@
              setInterval(fetchWidgetData, 60000); // Odświeżanie co 60 sekund
              
              document.getElementById('join-button').addEventListener('click', () => {
-                 const inviteLink = "https://discord.gg/Yv8xjZrn5G; 
-                 copyToClipboard(inviteLink);
+                 // 1. Otwarcie linku w nowej karcie (TARGET BLANK)
+                 window.open(PERMANENT_INVITE_LINK, '_blank');
+                 
+                 // 2. Opcjonalnie: Kopiowanie linku do schowka (wyłączone, bo zazwyczaj wystarczy przekierowanie)
+                 // copyToClipboard(PERMANENT_INVITE_LINK); 
              });
         });
     </script>
 
 </body>
 </html>
-
-
-
