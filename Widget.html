@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget Discord - Kreatywny Design</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Tło strony jest ciemne (#1a1a1a) */
+            background-color: #1a1a1a; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            perspective: 1000px; 
+        }
+
+        /* Ustawienia kolorów i cieni */
+        .discord-card {
+            background-color: #1a1a1a; 
+            transition: transform 0.4s ease-out, box-shadow 0.4s ease-out;
+            border: 1px solid #36393f;
+            border-radius: 12px; 
+        }
+
+        /* Subtelny dynamiczny cień i obrót (efekt "unoszenia") */
+        .discord-card:hover {
+            transform: translateY(-5px) rotateX(1deg) rotateY(1deg);
+            /* Używamy cyjanowego cienia na hover, aby podświetlić kartę */
+            box-shadow: 0 10px 30px rgba(0, 188, 212, 0.4); 
+        }
+
+        /* Tło nagłówka z gradientem */
+        .header-bg {
+            background: linear-gradient(135deg, #233235, #1b2326); 
+            /* Pasek akcentu na #00BCD4 */
+            border-bottom: 2px solid #00BCD4; 
+        }
+
+        /* Styl dla pojedynczego użytkownika na liście */
+        .member-item {
+            background-color: #23272A; 
+        }
+        
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'card-bg': '#1a1a1a', 
+                        'header-dark': '#1b2326', 
+                        'light-text': '#fcfcfc',
+                        'muted-text': '#b0b3b8',
+                        // AKCENT SZARY (dla statycznego tekstu i tła przycisku)
+                        'accent-grey': '#b9b9b9', 
+                        // NOWY AKCENT CYJANOWY (dla wyróżnień, hover i statusu)
+                        'accent-vibrant': '#00BCD4', 
+                        'status-online': '#4DD0E1', 
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="p-8">
+
+    <div id="discord-widget" class="discord-card w-full max-w-sm rounded-xl shadow-2xl overflow-hidden">
+        
+        <div class="p-4 header-bg flex items-center justify-between">
+            <div class="flex items-center">
+                <img src="./EN_G.png" onerror="this.onerror=null;this.src='https://placehold.co/40x40/36393f/b9b9b9?text=EN';" alt="Eagle Nest Logo" class="w-10 h-10 object-contain rounded-lg mr-3 shadow-md">
+
+                <div>
+                    <h1 class="text-xl font-extrabold text-light-text tracking-wider">EAGLE NEST</h1>
+                    <div class="flex items-center mt-1">
+                        <span class="w-2 h-2 rounded-full mr-2 bg-status-online shadow-status-online"></span>
+                        <p id="online-status" class="text-xs text-muted-text font-medium uppercase">Ładowanie...</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Używamy akcentu szarego dla stałego elementu -->
+            <i class="fab fa-discord text-4xl text-accent-grey opacity-80"></i>
+        </div>
+
+        <div class="p-5 text-center">
+            
+            <div class="flex items-center justify-center bg-gray-900/50 p-3 rounded-lg mb-6 border border-gray-800">
+                <!-- Używamy akcentu szarego dla ikony -->
+                <i class="fas fa-scroll text-xl text-accent-grey mr-3"></i>
+                <p class="text-sm text-muted-text font-bold uppercase tracking-wider">
+                    Akceptujesz <span class="text-accent-vibrant">#regulamin</span> po dołączeniu!
+                </p>
+            </div>
+
+            <!-- Przycisk z tłem SZARYM i HOVER CYJANOWYM -->
+            <button id="join-button" 
+                class="w-full py-3 bg-accent-grey text-gray-900 font-extrabold rounded-lg uppercase tracking-widest 
+                       shadow-lg shadow-accent-vibrant/50 
+                       hover:bg-accent-vibrant hover:text-white
+                       transition duration-300 transform active:scale-95 
+                       focus:outline-none focus:ring-4 focus:ring-accent-vibrant focus:ring-opacity-70">
+                <i class="fas fa-arrow-right-to-bracket mr-2"></i> ZABIERZ MNIE NA SERWER
+            </button>
+        </div>
+        
+        <!-- Sekcja listy użytkowników -->
+        <div class="p-4 border-t border-gray-800">
+            <h2 class="text-sm font-semibold text-muted-text uppercase mb-3 flex justify-between items-center">
+                <span>Aktywni Użytkownicy</span>
+                <!-- Używamy cyjanowego akcentu dla licznika -->
+                <span id="member-count" class="text-accent-vibrant text-base font-extrabold">0</span>
+            </h2>
+            <div id="member-list" class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                <!-- Tutaj zostaną wstawieni członkowie przez JS -->
+                <p class="text-muted-text text-sm text-center" id="loading-message">Ładowanie listy członków...</p>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Kontener na wiadomości typu Toast -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50"></div>
+
+    <script>
+        // ID TWOJEGO SERWERA DISCORD, pobrane ze zrzutów
+        const DISCORD_SERVER_ID = "1329827505703747687";
+        const DISCORD_API_URL = `https://discord.com/api/guilds/${DISCORD_SERVER_ID}/widget.json`;
+        
+        // --- Funkcje użytkowe ---
+        
+        function copyToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed'; 
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                showToast("Skopiowano link do schowka!");
+            } catch (err) {
+                console.error('Copy failed: ', err);
+                showToast("Błąd: Nie udało się skopiować linku.", 'red');
+            }
+            
+            document.body.removeChild(textarea);
+        }
+
+        function showToast(message, color = 'green') {
+            const container = document.getElementById('toast-container');
+            // Toast używa cyjanu, bo jest to kolor powiadomienia, który musi być widoczny.
+            const bgColor = color === 'red' ? 'bg-red-500' : 'bg-[#00BCD4]'; 
+
+            const toast = document.createElement('div');
+            toast.className = `p-3 mb-2 ${bgColor} text-white rounded-lg shadow-xl opacity-0 transition-opacity duration-300`;
+            toast.textContent = message;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-0');
+                toast.classList.add('opacity-100');
+            }, 10); 
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+                
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300); 
+            }, 3000);
+        }
+        
+        // --- Funkcje logiki Discorda ---
+
+        function renderMembers(members) {
+            const memberList = document.getElementById('member-list');
+            const loadingMessage = document.getElementById('loading-message');
+            memberList.innerHTML = ''; // Wyczyść poprzednie dane
+            
+            if (loadingMessage) {
+                 loadingMessage.remove(); // Usuń komunikat ładowania
+            }
+
+            if (!members || members.length === 0) {
+                memberList.innerHTML = '<p class="text-muted-text text-sm text-center p-2">Brak aktywnych użytkowników do wyświetlenia.</p>';
+                return;
+            }
+
+            members.slice(0, 5).forEach(member => { // Pokaż tylko 5 pierwszych członków
+                const avatarUrl = member.avatar_url || 'https://cdn.discordapp.com/embed/avatars/0.png';
+
+                const memberElement = document.createElement('div');
+                memberElement.className = 'member-item flex items-center p-2 rounded-lg transition duration-200 hover:bg-gray-800';
+                
+                memberElement.innerHTML = `
+                    <img src="${avatarUrl}" alt="${member.username}" class="w-8 h-8 rounded-full mr-3 object-cover">
+                    <span class="text-light-text text-sm font-medium truncate">${member.username}</span>
+                    <span class="ml-auto text-xs font-semibold text-status-online">Online</span>
+                `;
+                memberList.appendChild(memberElement);
+            });
+
+            // Dodaj informację, jeśli jest więcej członków
+            if (members.length > 5) {
+                 const moreCount = members.length - 5;
+                 const moreInfo = document.createElement('p');
+                 moreInfo.className = 'text-muted-text text-xs text-center pt-2';
+                 moreInfo.textContent = `i ${moreCount} innych...`;
+                 memberList.appendChild(moreInfo);
+            }
+        }
+        
+        async function fetchWidgetData() {
+            // Wprowadzam prostą obsługę błędów i ponawiania, aby uniknąć problemów z siecią.
+            const maxRetries = 3;
+            let lastError = null;
+            
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    const response = await fetch(DISCORD_API_URL);
+                    if (!response.ok) {
+                        throw new Error(`Błąd HTTP: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    // 1. Aktualizacja statusu online w nagłówku
+                    const onlineCount = data.members ? data.members.length : 0;
+                    document.getElementById('online-status').textContent = `Online: ${onlineCount} osoby`;
+                    document.getElementById('member-count').textContent = onlineCount;
+                    
+                    // 2. Renderowanie listy członków
+                    renderMembers(data.members);
+                    return; // Zakończ po udanym pobraniu
+                    
+                } catch (error) {
+                    lastError = error;
+                    console.error(`Próba ${attempt} nieudana:`, error);
+                    if (attempt < maxRetries) {
+                         // Implementacja wykładniczego wycofywania: 1s, 2s, 4s
+                         const delay = Math.pow(2, attempt) * 1000;
+                         await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+
+            // Jeśli wszystkie próby się nie powiodły
+            console.error("Nie udało się pobrać danych widgetu Discorda po wszystkich próbach:", lastError);
+            document.getElementById('online-status').textContent = 'Widget Serwera jest wyłączony!';
+            document.getElementById('member-count').textContent = 'BŁĄD';
+            const memberList = document.getElementById('member-list');
+            memberList.innerHTML = '<p class="text-red-400 text-sm text-center p-2">Błąd: Upewnij się, że Widget Serwera jest włączony na Discordzie (Ustawienia -> Widget serwera).</p>';
+        }
+
+        // --- Uruchomienie skryptów po załadowaniu DOM ---
+        
+        document.addEventListener('DOMContentLoaded', () => {
+             fetchWidgetData();
+             setInterval(fetchWidgetData, 60000); // Odświeżanie co 60 sekund
+             
+             document.getElementById('join-button').addEventListener('click', () => {
+                 const inviteLink = "https://discord.gg/Z8gAAP5Jst"; 
+                 copyToClipboard(inviteLink);
+             });
+        });
+    </script>
+
+</body>
+</html>
